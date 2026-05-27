@@ -218,10 +218,33 @@ else
     fail "_trash_ 目录被错误扫描，输出: $output"
 fi
 
-# ── 测试 10：参数错误处理 ─────────────────────────────────────────────────────
+# ── 测试 10：空目录自动清理 ──────────────────────────────────────────────────
 
 echo ""
-echo -e "${BOLD}== 测试 10：参数错误处理 ==${NC}"
+echo -e "${BOLD}== 测试 10：trash 后空目录自动清理 ==${NC}"
+read -r A B <<< "$(setup t10)"
+mkdir -p "${A}/photos" "${B}/photos" "${B}/old_folder/sub"
+printf '%.0sx' {1..100} > "${A}/photos/img.jpg"
+printf '%.0sx' {1..100} > "${B}/photos/img.jpg"
+printf '%.0sx' {1..200} > "${B}/old_folder/sub/to_delete.txt"
+run_sync "$A" "$B"
+assert_no_file "${B}/old_folder/sub/to_delete.txt" "文件移入 trash"
+if [[ -d "${B}/old_folder/sub" ]]; then
+    fail "空子目录 old_folder/sub 应被删除"
+else
+    pass "空子目录 old_folder/sub 已自动删除"
+fi
+if [[ -d "${B}/old_folder" ]]; then
+    fail "空父目录 old_folder 应被删除"
+else
+    pass "空父目录 old_folder 已自动删除"
+fi
+assert_file "${B}/photos/img.jpg" "非空目录 photos 保留"
+
+# ── 测试 11：参数错误处理 ─────────────────────────────────────────────────────
+
+echo ""
+echo -e "${BOLD}== 测试 11：参数错误处理 ==${NC}"
 if ! "$BINARY" /nonexistent/path /tmp 2>/dev/null; then
     pass "源目录不存在时退出非零"
 else

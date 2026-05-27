@@ -325,6 +325,26 @@ fn execute_trashes(
     Ok(())
 }
 
+// 递归删除 root 下所有空目录（不删 root 本身，不进入 _trash_ 目录）
+fn remove_empty_dirs(root: &Path) -> io::Result<()> {
+    for entry in fs::read_dir(root)? {
+        let entry = entry?;
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        if path.file_name().map(|n| n.to_string_lossy().starts_with("_trash_")).unwrap_or(false) {
+            continue;
+        }
+        remove_empty_dirs(&path)?;
+        if fs::read_dir(&path)?.next().is_none() {
+            fs::remove_dir(&path)?;
+            println!("  {}  {}", "rmdir".dimmed(), path.strip_prefix(root).unwrap_or(&path).display());
+        }
+    }
+    Ok(())
+}
+
 fn execute_copies(plan: &SyncPlan, a_root: &Path, b_root: &Path, a_idx: &FileIndex) -> io::Result<()> {
     if plan.copies.is_empty() {
         return Ok(());
@@ -474,6 +494,10 @@ fn main() {
     }
     if let Err(e) = execute_trashes(&plan, &b_root, &timestamp, &inline_trashed) {
         eprintln!("{}", format!("Trash 操作失败：{}", e).red());
+        std::process::exit(1);
+    }
+    if let Err(e) = remove_empty_dirs(&b_root) {
+        eprintln!("{}", format!("清理空目录失败：{}", e).red());
         std::process::exit(1);
     }
     if let Err(e) = execute_copies(&plan, &a_root, &b_root, &a_idx) {
